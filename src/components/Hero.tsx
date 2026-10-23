@@ -6,7 +6,7 @@ export function Hero() {
   return (
     <section className="coffee-hero" id="top" aria-label={t.heroLabel}>
       <div className="coffee-hero-photo">
-        <img src="/images/coffee-hero-v2.webp" alt={t.heroImageAlt} {...{ fetchpriority: 'high' }} />
+        <img src="/images/coffee-hero-v2.png" alt={t.heroImageAlt} {...{ fetchpriority: 'high' }} />
       </div>
       <div className="coffee-hero-content">
         <p className="coffee-kicker">{t.heroKicker}</p>
