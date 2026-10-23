@@ -1,0 +1,21 @@
+# Dependencies and build output
+node_modules
+dist
+
+# Local environment (copy .env.example to .env)
+.env
+.env.*
+!.env.example
+*.local
+
+# Editor / tooling
+.claude/
+.vercel
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
