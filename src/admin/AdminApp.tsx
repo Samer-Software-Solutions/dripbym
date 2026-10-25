@@ -25,6 +25,7 @@ import {
   subscribeToStore,
 } from './api'
 import { I18nProvider, useT, type Dict } from './i18n'
+import { disablePush, onOpenOrdersRequest, registerAdminWorker } from './push'
 import { playChime, unlockSound } from './sound'
 import { LangToggle, Spinner, ToastProvider, useToast } from './ui'
 import Login from './Login'
@@ -77,8 +78,23 @@ export default function AdminApp() {
     const robots = document.createElement('meta')
     robots.name = 'robots'
     robots.content = 'noindex, nofollow'
-    document.head.appendChild(robots)
-    return () => robots.remove()
+    // Makes the admin installable as its own app (needed for notifications on iPhone).
+    const manifest = document.createElement('link')
+    manifest.rel = 'manifest'
+    manifest.href = '/admin.webmanifest'
+    const appTitle = document.createElement('meta')
+    appTitle.name = 'apple-mobile-web-app-title'
+    appTitle.content = 'Drip Admin'
+    document.head.append(robots, manifest, appTitle)
+    const touchIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]')
+    const shopTouchIcon = touchIcon?.getAttribute('href')
+    touchIcon?.setAttribute('href', '/images/admin-apple-touch-icon.png')
+    return () => {
+      robots.remove()
+      manifest.remove()
+      appTitle.remove()
+      if (shopTouchIcon) touchIcon?.setAttribute('href', shopTouchIcon)
+    }
   }, [])
 
   return (
@@ -160,6 +176,8 @@ function Gate({ client }: { client: SupabaseClient }) {
 
   const signOut = useCallback(async () => {
     setSigningOut(true)
+    // A signed-out device should stop getting order details.
+    await disablePush().catch((e) => console.warn('Could not turn off notifications', e))
     const { error } = await client.auth.signOut()
     if (error) {
       // Still clear this browser's session if the server could not be reached.
@@ -274,6 +292,14 @@ function Shell({ email, onSignOut, signingOut }: ShellProps) {
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  // Order notifications: keep the service worker registered, and open Orders when one is tapped.
+  useEffect(() => {
+    registerAdminWorker()
+    return onOpenOrdersRequest(() => {
+      window.location.hash = '#/orders'
+    })
   }, [])
 
   const pendingCount = orders.filter((order) => order.status === 'pending').length

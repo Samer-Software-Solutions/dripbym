@@ -13,6 +13,7 @@ import { normalizeDigits, roundMoney } from './format'
 import { useT, type Dict, type Lang } from './i18n'
 import { ConfirmDialog, Modal, Spinner, Thumb, useToast } from './ui'
 import ProductPicker from './ProductPicker'
+import PushToggle from './PushToggle'
 
 interface Props {
   orders: OrderRow[]
@@ -163,6 +164,8 @@ export default function OrdersPage({ orders, setOrders, products, soundOn, onTog
             </button>
           </div>
         </div>
+
+        <PushToggle />
 
         <div className="ad-toolbar ad-orders-toolbar">
           <div className="ad-segment" role="group" aria-label={t.statusFilter}>

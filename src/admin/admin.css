@@ -1034,6 +1034,10 @@
   border-radius: var(--a-radius);
   background: #fcfaf7;
 }
+.admin .ad-push-row,
+.admin .ad-push-note {
+  margin-bottom: 16px;
+}
 
 /* ---------- Modal ---------- */
 
