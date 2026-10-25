@@ -3,31 +3,67 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Drip by M | Coffee Beans & Brewing Gear in Qatar</title>
-    <meta name="description" content="Explore coffee beans, distinctive blends, filters and brewing equipment at Drip by M, Qatar." />
-    <meta name="keywords" content="Drip by M, Qatar coffee, coffee beans, filters, brewing gear" />
+    <title>Drip by M | Coffee Beans & Brewing Gear in Doha, Qatar</title>
+    <meta name="description" content="Shop coffee beans, distinctive blends, filters and brewing gear at Drip by M. Order on WhatsApp with delivery across Doha and Qatar." />
+    <link rel="canonical" href="https://dripbym.qa/" />
     <meta name="theme-color" content="#221810" />
     <link rel="icon" type="image/webp" href="/images/drip-icon-v3.webp" />
     <link rel="apple-touch-icon" href="/images/drip-icon-v3.webp" />
-    <link rel="preload" as="image" href="/images/coffee-hero-v2.png" fetchpriority="high" />
+    <link rel="preload" as="image" href="/images/coffee-hero-v3.webp" type="image/webp" fetchpriority="high" />
 
+    <!-- Link previews (WhatsApp, Instagram, X…). Image URLs must be absolute for these apps. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Drip by M" />
-    <meta property="og:title" content="Drip by M | Coffee Beans & Brewing Gear in Qatar" />
+    <meta property="og:url" content="https://dripbym.qa/" />
+    <meta property="og:locale" content="en_QA" />
+    <meta property="og:locale:alternate" content="ar_QA" />
+    <meta property="og:title" content="Drip by M | Coffee Beans & Brewing Gear in Doha, Qatar" />
     <meta property="og:description" content="Distinctive beans. Beautiful blends. Everything you need to make your daily cup a little more special." />
-    <meta property="og:image" content="/images/coffee-hero-v2.png" />
+    <meta property="og:image" content="https://dripbym.qa/images/og-share.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Illustration of the Drip by M coffee shop" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Drip by M | Coffee Beans & Brewing Gear in Doha, Qatar" />
+    <meta name="twitter:description" content="Distinctive beans. Beautiful blends. Everything you need to make your daily cup a little more special." />
+    <meta name="twitter:image" content="https://dripbym.qa/images/og-share.jpg" />
 
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "Store",
-        "name": "Drip by M",
-        "description": "Coffee beans, distinctive blends and brewing essentials in Qatar.",
-        "image": "/images/drip-logo.webp",
-        "address": { "@type": "PostalAddress", "addressCountry": "QA" },
-        "telephone": "+97451750557",
-        "priceRange": "28-260 QAR"
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://dripbym.qa/#website",
+            "url": "https://dripbym.qa/",
+            "name": "Drip by M",
+            "alternateName": ["Drip by m", "دريب باي إم"],
+            "inLanguage": ["en", "ar"],
+            "publisher": { "@id": "https://dripbym.qa/#store" }
+          },
+          {
+            "@type": "OnlineStore",
+            "@id": "https://dripbym.qa/#store",
+            "name": "Drip by M",
+            "alternateName": "دريب باي إم",
+            "url": "https://dripbym.qa/",
+            "logo": "https://dripbym.qa/images/drip-logo.webp",
+            "image": "https://dripbym.qa/images/og-share.jpg",
+            "description": "Coffee beans, distinctive blends, filters and brewing gear, delivered across Doha and Qatar.",
+            "telephone": "+97451750557",
+            "address": { "@type": "PostalAddress", "addressLocality": "Doha", "addressCountry": "QA" },
+            "areaServed": { "@type": "Country", "name": "Qatar" },
+            "currenciesAccepted": "QAR",
+            "sameAs": ["https://www.instagram.com/drip.bym"],
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "telephone": "+97451750557",
+              "contactType": "customer service",
+              "areaServed": "QA",
+              "availableLanguage": ["English", "Arabic"]
+            }
+          }
+        ]
       }
     </script>
   </head>
