@@ -226,9 +226,21 @@ interface ConfirmProps {
   danger?: boolean
   /** Optional middle action, e.g. "Hide instead". */
   secondary?: { label: string; onClick: () => void }
+  /** Text of the button that closes the dialog (default "Cancel"). */
+  cancelLabel?: string
 }
 
-export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCancel, busy, danger, secondary }: ConfirmProps) {
+export function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  busy,
+  danger,
+  secondary,
+  cancelLabel,
+}: ConfirmProps) {
   const { t } = useT()
   return (
     <Modal
@@ -238,7 +250,7 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCance
       footer={
         <>
           <button type="button" className="ad-btn ad-btn--ghost" onClick={onCancel} disabled={busy} data-autofocus>
-            {t.cancel}
+            {cancelLabel ?? t.cancel}
           </button>
           {secondary && (
             <button type="button" className="ad-btn ad-btn--secondary" onClick={secondary.onClick} disabled={busy}>

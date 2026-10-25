@@ -21,9 +21,10 @@ export function CartSheet() {
     deliveryFee,
     customer,
     setCustomer,
-    buildWhatsAppUrl,
+    placeOrder,
   } = useShop()
   const [showErrors, setShowErrors] = useState(false)
+  const [placing, setPlacing] = useState(false)
 
   const hasWhatsApp = !!store.settings.whatsapp.replace(/\D/g, '')
   const phoneDigits = customer.phone.replace(/\D/g, '')
@@ -35,13 +36,26 @@ export function CartSheet() {
   const fee = deliveryFee(customer.zone)
   const formatFee = (amount: number) => (amount ? `${amount} ${t.qar}` : t.free)
 
-  const checkout = () => {
+  const checkout = async () => {
     if (errors.zone || errors.name || errors.phone) {
       setShowErrors(true)
       return
     }
-    const url = buildWhatsAppUrl()
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    if (placing) return
+    // Open the tab now, while the tap still counts as the user's action, so browsers don't
+    // block it as a popup once the order has been saved.
+    const tab = window.open('', '_blank')
+    setPlacing(true)
+    try {
+      const url = await placeOrder()
+      if (!url) tab?.close()
+      else if (tab) {
+        tab.opener = null
+        tab.location.href = url
+      } else window.location.href = url
+    } finally {
+      setPlacing(false)
+    }
   }
 
   const zones: { id: DeliveryZone; label: string }[] = [
@@ -127,6 +141,7 @@ export function CartSheet() {
                   value={customer.name}
                   onChange={(e) => setCustomer({ name: e.target.value })}
                   autoComplete="name"
+                  maxLength={100}
                   aria-invalid={showErrors && errors.name}
                 />
               </label>
@@ -172,8 +187,13 @@ export function CartSheet() {
             </div>
           </>
         )}
-        <button type="button" className={`primary-button full ${cartCount > 0 && hasWhatsApp ? '' : 'disabled'}`} onClick={checkout} disabled={cartCount === 0 || !hasWhatsApp}>
-          {hasWhatsApp ? t.checkout : t.orderingSoon}
+        <button
+          type="button"
+          className={`primary-button full ${cartCount > 0 && hasWhatsApp ? '' : 'disabled'}`}
+          onClick={() => void checkout()}
+          disabled={cartCount === 0 || !hasWhatsApp || placing}
+        >
+          {!hasWhatsApp ? t.orderingSoon : placing ? t.placingOrder : t.checkout}
           <ArrowRight size={17} aria-hidden="true" />
         </button>
         <p>{hasWhatsApp ? t.checkoutNote : t.orderingSoonNote}</p>

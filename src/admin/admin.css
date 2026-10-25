@@ -674,6 +674,37 @@
   background: var(--a-danger-bg);
   color: var(--a-danger);
 }
+.admin .ad-pill--ok {
+  background: var(--a-ok-bg);
+  color: var(--a-ok);
+}
+
+/* Pending-orders count: in the sidebar next to "Orders", and in the phone top bar. */
+.admin .ad-nav-count {
+  margin-inline-start: auto;
+  min-width: 24px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--a-gold);
+  color: var(--a-ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+.admin .ad-topbar-orders {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+  min-height: 36px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--a-gold);
+  color: var(--a-ink);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
 
 /* ---------- Stock alerts ---------- */
 
@@ -1310,6 +1341,400 @@
   }
 }
 
+/* ---------- Orders ---------- */
+
+.admin .ad-orders {
+  container: orders / inline-size;
+}
+.admin .ad-orders-toolbar {
+  flex-wrap: wrap;
+}
+.admin .ad-orders-toolbar .ad-search {
+  min-width: 220px;
+}
+
+/* Status filter: one row of toggle buttons. */
+.admin .ad-segment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--a-radius);
+  background: #3d2b210d;
+}
+.admin .ad-segment button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-muted);
+  cursor: pointer;
+}
+.admin .ad-segment button:hover {
+  color: var(--a-ink);
+}
+.admin .ad-segment button[aria-pressed='true'] {
+  background: #fff;
+  color: var(--a-ink);
+  box-shadow: 0 1px 3px #22181020;
+}
+.admin .ad-segment-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #3d2b2114;
+  font-size: 12px;
+  text-align: center;
+}
+
+.admin .ad-olist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.admin .ad-orow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) 120px 210px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 8px;
+  border-top: 1px solid var(--a-line);
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.admin .ad-orow:hover {
+  background: #fcfaf7;
+}
+.admin .ad-orow--cancelled .ad-orow-who,
+.admin .ad-orow--cancelled .ad-orow-items,
+.admin .ad-orow--cancelled .ad-orow-total {
+  opacity: 0.6;
+}
+.admin .ad-orow-who,
+.admin .ad-orow-total,
+.admin .ad-orow-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.admin .ad-orow-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.admin .ad-orow-title strong {
+  color: var(--a-ink);
+}
+.admin .ad-orow-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin .ad-orow-items {
+  color: var(--a-text);
+  overflow-wrap: anywhere;
+}
+.admin .ad-orow-total strong {
+  white-space: nowrap;
+}
+.admin .ad-orow-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+@container orders (max-width: 760px) {
+  .admin .ad-orow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'who total'
+      'items items'
+      'status status';
+    gap: 8px 12px;
+    padding: 14px 12px;
+    margin-top: 10px;
+    border: 1px solid var(--a-line);
+    border-radius: var(--a-radius);
+    background: #fff;
+  }
+  .admin .ad-orow-who {
+    grid-area: who;
+  }
+  .admin .ad-orow-items {
+    grid-area: items;
+  }
+  .admin .ad-orow-total {
+    grid-area: total;
+    align-items: flex-end;
+  }
+  .admin .ad-orow-status {
+    grid-area: status;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+  }
+}
+
+/* Order window */
+.admin .ad-order {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.admin .ad-block {
+  display: block;
+}
+.admin .ad-order-info {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+  padding: 16px;
+  border-radius: var(--a-radius);
+  background: #fcfaf7;
+  border: 1px solid var(--a-line);
+}
+.admin .ad-order-info dt,
+.admin .ad-order-heading {
+  font-family: var(--a-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--a-muted);
+}
+.admin .ad-order-info dd {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.admin .ad-order-phone {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.admin .ad-order-heading {
+  margin-bottom: 8px;
+}
+
+.admin .ad-olines {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.admin .ad-oline {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto 90px 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--a-line);
+}
+.admin .ad-oline:first-child {
+  border-top: 0;
+}
+.admin .ad-oline-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.admin .ad-oline-problem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--a-danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+.admin .ad-oline.has-problem .ad-thumb {
+  outline: 2px solid var(--a-danger);
+  outline-offset: 1px;
+}
+.admin .ad-qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  border-left: 1px solid var(--a-line);
+  border-right: 1px solid var(--a-line);
+  font-weight: 700;
+}
+.admin .ad-oline .ad-step-btn {
+  width: 38px;
+  min-height: 38px;
+}
+.admin .ad-oline-qty--fixed {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.admin .ad-oline-total {
+  text-align: end;
+  white-space: nowrap;
+}
+.admin .ad-oline:not(:has(.ad-oline-remove)) {
+  grid-template-columns: 48px minmax(0, 1fr) auto 90px;
+}
+.admin .ad-order-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--a-line-strong);
+}
+
+/* "Add a product" picker in the order window */
+.admin .ad-picker-open {
+  align-self: flex-start;
+}
+.admin .ad-picker {
+  border: 1px solid var(--a-line-strong);
+  border-radius: var(--a-radius);
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 6px 20px #2218100f;
+}
+.admin .ad-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--a-line);
+  background: #fcfaf7;
+}
+.admin .ad-picker-head .ad-search {
+  flex: 1;
+}
+.admin .ad-picker-list {
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+.admin .ad-picker-option {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.admin .ad-picker-option + .ad-picker-option {
+  margin-top: 2px;
+}
+.admin .ad-picker-option.is-active {
+  background: var(--a-gold-soft);
+}
+.admin .ad-picker-option.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.admin .ad-picker-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.admin .ad-picker-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.admin .ad-picker-tags:empty {
+  display: none;
+}
+.admin .ad-picker-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+.admin .ad-picker-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.admin .ad-picker-empty {
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--a-muted);
+}
+
+.admin .ad-order-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-inline-start: auto;
+  width: min(100%, 320px);
+}
+.admin .ad-order-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.admin .ad-order-totals dd {
+  white-space: nowrap;
+}
+.admin .ad-order-grand {
+  padding-top: 8px;
+  border-top: 1px solid var(--a-line-strong);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--a-ink);
+}
+
+.admin .ad-notice.ad-order-blocked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.admin .ad-order-blocked > p {
+  min-width: 0;
+}
+.admin .ad-order-blocked ul {
+  padding-inline-start: 20px;
+  list-style: disc;
+  font-weight: 400;
+}
+.admin .ad-order-blocked-hint {
+  font-weight: 400;
+}
+
+.admin .ad-stock-changes {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--a-radius);
+  background: #fcfaf7;
+  border: 1px solid var(--a-line);
+}
+.admin .ad-stock-changes li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 /* ---------- Tablet / phone ---------- */
 
 /* The product list adapts to the space it has (the sidebar takes part of the screen),
@@ -1430,6 +1855,42 @@
   .admin .ad-step-btn {
     width: 46px;
     min-height: 46px;
+  }
+
+  .admin .ad-segment {
+    display: flex;
+  }
+  .admin .ad-segment button {
+    flex: 1;
+    justify-content: center;
+  }
+  .admin .ad-order-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin .ad-oline,
+  .admin .ad-oline:not(:has(.ad-oline-remove)) {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'thumb name remove'
+      'thumb qty total';
+    gap: 8px 12px;
+  }
+  .admin .ad-oline > .ad-thumb {
+    grid-area: thumb;
+    align-self: start;
+  }
+  .admin .ad-oline-name {
+    grid-area: name;
+  }
+  .admin .ad-oline-qty {
+    grid-area: qty;
+    justify-self: start;
+  }
+  .admin .ad-oline-total {
+    grid-area: total;
+  }
+  .admin .ad-oline-remove {
+    grid-area: remove;
   }
 
   /* Dialogs: the editor fills the screen, small dialogs stay centred */

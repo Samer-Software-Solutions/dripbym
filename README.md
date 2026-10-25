@@ -47,9 +47,23 @@ The publishable key is safe in the browser; never put the `service_role` / secre
 - `categories` — the filter tabs.
 - `settings` — WhatsApp, Instagram, delivery fees (inside / outside Doha), low-stock threshold, and all editable site text.
 - `admins` — who can edit. Row-level security: the public can only read visible products and settings; only admins can write.
+- `orders` — orders from the WhatsApp checkout (number, customer, items as ordered, totals, status). Only admins can read them.
 - Storage bucket `product-images` — uploaded product photos.
 
-Stock is **not** deducted automatically (orders finish on WhatsApp). Lower it in the admin after confirming an order.
+### Orders and stock
+
+1. When a customer taps **Continue on WhatsApp**, the shop saves the order (`place_order()` in Supabase, which
+   prices it from the database) and puts its number in the WhatsApp message, e.g. `Drip by M order #1042`.
+2. It shows up in **Admin → Orders** as *Pending*, live, with a chime (can be turned off there).
+3. You can change quantities, remove items or add products while it is pending.
+4. Once the customer has paid, **Approve** it: its items are taken out of stock in one step. Approving is blocked,
+   with the reason shown, while any product doesn't have enough stock.
+5. **Cancel** a pending order to drop it, or an approved one to put its items back in stock.
+6. **Undo**: an approved order can go back to Pending (its items go back in stock), and so can a cancelled one.
+   Approving it again goes through the same stock check.
+
+Pending orders are deleted automatically 60 hours after they became pending (`pg_cron` job `delete-abandoned-orders`).
+Cancelled and approved orders are kept.
 
 ## Deploy (Vercel)
 

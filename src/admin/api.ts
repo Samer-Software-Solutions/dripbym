@@ -1,18 +1,34 @@
 // All reads and writes the admin panel makes to Supabase live here.
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { PRODUCT_IMAGES_BUCKET, supabase } from '../lib/supabase'
-import type { CategoryRow, ProductRow, SettingsRow } from '../lib/db'
+import type { CategoryRow, OrderRow, ProductRow, SettingsRow } from '../lib/db'
 
 export type ProductInput = Omit<ProductRow, 'id' | 'created_at' | 'updated_at'>
 export type CategoryInput = Omit<CategoryRow, 'id'>
 export type SettingsInput = Omit<SettingsRow, 'id' | 'updated_at'>
 
 /** Errors the UI should show in the admin's own language (see i18n `errors`). */
-export type AdminErrorCode = 'notConfigured' | 'nothingSaved' | 'deleted'
+export type AdminErrorCode = 'notConfigured' | 'nothingSaved' | 'deleted' | 'notAllowed' | 'productUnavailable'
 
 export class AdminError extends Error {
   constructor(readonly code: AdminErrorCode) {
     super(code)
+  }
+}
+
+/** A product in an order the database couldn't take out of stock. */
+export interface StockProblem {
+  product_id: string
+  needed: number
+  /** Null when the product no longer exists. */
+  stock: number | null
+  missing: boolean
+}
+
+/** Approving was refused because some products don't have enough stock (or were deleted). */
+export class StockError extends Error {
+  constructor(readonly problems: StockProblem[]) {
+    super('insufficient_stock')
   }
 }
 
@@ -64,6 +80,18 @@ export const toSettings = (row: SettingsRow): SettingsRow => ({
   low_stock_threshold: Number(row.low_stock_threshold),
   content: (row.content ?? {}) as SettingsRow['content'],
 })
+
+export const toOrder = (row: OrderRow): OrderRow => ({
+  ...row,
+  number: Number(row.number),
+  subtotal: Number(row.subtotal),
+  delivery_fee: Number(row.delivery_fee),
+  total: Number(row.total),
+  items: (row.items ?? []).map((item) => ({ ...item, unit_price: Number(item.unit_price), qty: Number(item.qty) })),
+})
+
+/** Newest first. */
+export const byNewest = (a: OrderRow, b: OrderRow) => b.created_at.localeCompare(a.created_at)
 
 export const byOrder = <T extends { sort_order: number; name_en: string }>(a: T, b: T) =>
   a.sort_order - b.sort_order || a.name_en.localeCompare(b.name_en)
@@ -181,18 +209,74 @@ export async function saveSettings(patch: Partial<SettingsInput>, expectedUpdate
   throw new AdminError('nothingSaved')
 }
 
+/* ---------- Orders ---------- */
+
+export async function fetchOrders(): Promise<OrderRow[]> {
+  const { data, error } = await client().from('orders').select('*').order('created_at', { ascending: false }).limit(500)
+  fail(error)
+  return (data as OrderRow[]).map(toOrder)
+}
+
+async function fetchOrder(id: string): Promise<OrderRow | null> {
+  const { data, error } = await client().from('orders').select('*').eq('id', id).maybeSingle()
+  fail(error)
+  return data ? toOrder(data as OrderRow) : null
+}
+
+/**
+ * Runs one of the order functions in Supabase. `updatedAt` is the version of the order on
+ * screen: if the order changed since (another device), throws ConflictError with the latest row.
+ */
+async function orderAction(fn: string, id: string, updatedAt: string, args: Record<string, unknown> = {}): Promise<OrderRow> {
+  const { data, error } = await client().rpc(fn, { p_order_id: id, p_expected_updated_at: updatedAt, ...args })
+  if (!error) return toOrder(data as OrderRow)
+
+  switch (error.message) {
+    case 'insufficient_stock':
+      throw new StockError(JSON.parse(error.details || '[]') as StockProblem[])
+    case 'order_missing':
+      throw new AdminError('deleted')
+    case 'not_allowed':
+      throw new AdminError('notAllowed')
+    case 'product_unavailable':
+      throw new AdminError('productUnavailable')
+    case 'order_changed':
+    case 'order_wrong_status': {
+      const latest = await fetchOrder(id)
+      if (!latest) throw new AdminError('deleted')
+      throw new ConflictError(latest)
+    }
+  }
+  throw new Error(error.message)
+}
+
+/** Replaces the items of a pending order. New products are added at their current price. */
+export const updateOrderItems = (order: OrderRow, items: { product_id: string; qty: number }[]) =>
+  orderAction('update_order_items', order.id, order.updated_at, { p_items: items })
+
+/** Approves a pending order and takes its items out of stock (all or nothing). */
+export const approveOrder = (order: OrderRow) => orderAction('approve_order', order.id, order.updated_at)
+
+/** Cancels a pending or approved order. An approved order's items go back in stock. */
+export const cancelOrder = (order: OrderRow) => orderAction('cancel_order', order.id, order.updated_at)
+
+/** Moves an approved or cancelled order back to pending. Undoing an approval puts its items back in stock. */
+export const reopenOrder = (order: OrderRow) => orderAction('reopen_order', order.id, order.updated_at)
+
 /* ---------- Live updates ---------- */
 
 export interface LiveHandlers {
   onProduct: (change: { type: 'upsert'; row: ProductRow } | { type: 'delete'; id: string }) => void
   onCategory: (change: { type: 'upsert'; row: CategoryRow } | { type: 'delete'; id: string }) => void
   onSettings: (row: SettingsRow) => void
+  /** 'insert' is a new order from the shop. */
+  onOrder: (change: { type: 'insert' | 'update'; row: OrderRow } | { type: 'delete'; id: string }) => void
   /** true while connected and receiving changes. */
   onStatus: (live: boolean) => void
 }
 
 /**
- * Pushes every change to products, categories and settings (from any device) to this screen.
+ * Pushes every change to products, categories, settings and orders (from any device) to this screen.
  * Returns an unsubscribe function.
  */
 export function subscribeToStore(handlers: LiveHandlers): () => void {
@@ -210,6 +294,14 @@ export function subscribeToStore(handlers: LiveHandlers): () => void {
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'settings' }, (payload) => {
       handlers.onSettings(toSettings(payload.new as SettingsRow))
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+      if (payload.eventType === 'DELETE') handlers.onOrder({ type: 'delete', id: (payload.old as { id: string }).id })
+      else
+        handlers.onOrder({
+          type: payload.eventType === 'INSERT' ? 'insert' : 'update',
+          row: toOrder(payload.new as OrderRow),
+        })
     })
     .subscribe((status) => handlers.onStatus(status === 'SUBSCRIBED'))
 

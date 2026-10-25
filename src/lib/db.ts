@@ -71,6 +71,42 @@ export interface SettingsRow {
   updated_at?: string
 }
 
+export type OrderStatus = 'pending' | 'approved' | 'cancelled'
+
+/** One line of an order: a copy of the product as it was when it was added to the order. */
+export interface OrderItem {
+  product_id: string
+  name_en: string
+  name_ar: string
+  image_url: string
+  unit_price: number
+  qty: number
+}
+
+export interface OrderRow {
+  id: string
+  /** Short order number shown to the customer in the WhatsApp message, e.g. 1042. */
+  number: number
+  status: OrderStatus
+  customer_name: string
+  /** 8 digits, without +974. */
+  customer_phone: string
+  zone: 'inside' | 'outside'
+  items: OrderItem[]
+  subtotal: number
+  delivery_fee: number
+  total: number
+  approved_at: string | null
+  cancelled_at: string | null
+  /** When the order was placed, or last moved back to pending. */
+  pending_since: string
+  created_at: string
+  updated_at: string
+}
+
+/** Pending orders are deleted this long after `pending_since` (see the cron job in Supabase). */
+export const PENDING_ORDER_LIFETIME_HOURS = 60
+
 /** Price the customer pays: the sale price when it is lower than the regular price. */
 export const effectivePrice = (p: Pick<ProductRow, 'price' | 'discount_price'>) =>
   p.discount_price != null && p.discount_price < p.price ? p.discount_price : p.price

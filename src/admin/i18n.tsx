@@ -1,7 +1,7 @@
 // English / Arabic text for the admin panel, plus the language switch.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import type { CategoryRow, ContentKey, ProductRow } from '../lib/db'
-import { AdminError, ConflictError, errorMessage } from './api'
+import { AdminError, ConflictError, StockError, errorMessage } from './api'
 import { ImageError } from './image'
 import { formatQar } from './format'
 
@@ -20,6 +20,17 @@ function arProducts(n: number): string {
   if (n === 2) return 'منتجان'
   if (n <= 10) return `${n} منتجات`
   return `${n} منتجًا`
+}
+
+/** 3–10 طلبات, 11+ طلبًا (1 and 2 are written out where used). */
+const arOrders = (n: number) => (n <= 10 ? `${n} طلبات` : `${n} طلبًا`)
+
+/** قطعة واحدة, قطعتان, 3–10 قطع, 11+ قطعة. */
+function arItems(n: number): string {
+  if (n === 1) return 'قطعة واحدة'
+  if (n === 2) return 'قطعتان'
+  if (n <= 10) return `${n} قطع`
+  return `${n} قطعة`
 }
 
 /* ---------- English ---------- */
@@ -53,6 +64,9 @@ const en = {
     nothingSaved: "Nothing was saved. The item may have been removed, or this account isn't allowed to make changes.",
     deleted: 'This item was deleted on another device.',
     conflict: 'This was changed on another device.',
+    notAllowed: "This account isn't allowed to do that.",
+    productUnavailable: 'One of the products no longer exists.',
+    insufficientStock: 'Not enough stock for this order.',
   },
   imageErrors: {
     notImage: 'That file is not an image. Please choose a JPG, PNG or WebP photo.',
@@ -77,9 +91,11 @@ const en = {
   navLabel: 'Admin sections',
   openMenu: 'Open menu',
   closeMenu: 'Close menu',
+  tabOrders: 'Orders',
   tabProducts: 'Products',
   tabCategories: 'Categories',
   tabSettings: 'Settings',
+  pendingBadge: (n: number) => (n === 1 ? '1 pending order' : `${n} pending orders`),
   live: 'Live',
   offline: 'Offline',
   liveTitle: 'Changes from other devices appear here automatically.',
@@ -285,6 +301,87 @@ const en = {
   loadLatestConfirm: 'Load the latest settings? Your unsaved changes on this page will be lost.',
   settingsMissingTitle: 'Settings not found',
   settingsMissingText: 'The settings row (id 1) is missing from the database, so there is nothing to edit here.',
+
+  // Orders
+  ordersTitle: 'Orders',
+  ordersWaiting: (n: number) =>
+    n === 0 ? 'No orders waiting for approval.' : n === 1 ? '1 order waiting for approval' : `${n} orders waiting for approval`,
+  ordersHint: 'Orders appear here when a customer continues to WhatsApp. Approve an order once it is paid to take it out of stock.',
+  statusFilter: 'Show orders',
+  statusPending: 'Pending',
+  statusApproved: 'Approved',
+  statusCancelled: 'Cancelled',
+  statusAll: 'All',
+  searchOrders: 'Search orders',
+  searchOrdersPlaceholder: 'Order number, name or phone…',
+  noOrders: 'No orders yet.',
+  noOrdersHere: 'No orders here.',
+  orderNumber: (n: number) => `Order #${n}`,
+  itemCount: (n: number) => (n === 1 ? '1 item' : `${n} items`),
+  removedIn: (hours: number) => (hours <= 1 ? 'Removed within the hour if not approved' : `Removed in ${hours} h if not approved`),
+  notEnoughStock: 'Not enough stock',
+  soundOnLabel: 'New-order sound is on. Turn it off',
+  soundOffLabel: 'New-order sound is off. Turn it on',
+  soundOn: 'New-order sound on',
+  soundOff: 'New-order sound off',
+  newOrder: (n: number, name: string) => `New order #${n} from ${name}`,
+  customer: 'Customer',
+  phone: 'Phone',
+  chatOnWhatsApp: 'Chat on WhatsApp',
+  deliveryArea: 'Delivery',
+  zoneInside: 'Inside Doha',
+  zoneOutside: 'Outside Doha',
+  placed: 'Placed',
+  approvedOn: 'Approved',
+  cancelledOn: 'Cancelled',
+  status: 'Status',
+  items: 'Items',
+  each: (price: string) => `${price} each`,
+  qtyFor: (name: string) => `Quantity of “${name}”`,
+  oneLessItem: (name: string) => `One less “${name}”`,
+  oneMoreItem: (name: string) => `One more “${name}”`,
+  removeItem: (name: string) => `Remove “${name}” from the order`,
+  addItemLabel: 'Add a product to the order',
+  inOrder: (n: number) => `In order × ${n}`,
+  inStockShort: (n: number) => `${n} in stock`,
+  subtotal: 'Subtotal',
+  deliveryFee: 'Delivery',
+  total: 'Total',
+  free: 'Free',
+  problemShort: (stock: number, needed: number) =>
+    stock === 0 ? `Out of stock. This order needs ${needed}.` : `Only ${stock} in stock. This order needs ${needed}.`,
+  problemMissing: 'This product was deleted from the shop.',
+  cantApproveTitle: "Can't approve yet",
+  cantApproveHint: 'Lower the quantity, remove the item, or add stock on the Products page.',
+  saveBeforeApprove: 'Save your changes before approving.',
+  emptyOrder: 'An order needs at least one item. To drop the whole order, cancel it.',
+  approve: 'Approve',
+  approveTitle: (n: number) => `Approve order #${n}?`,
+  approveText: 'Only approve once the customer has paid. These items will be taken out of stock:',
+  stockChange: (from: number, to: number) => `${from} → ${to}`,
+  stockNotTracked: 'Not tracked',
+  orderApproved: (n: number) => `Order #${n} approved. Stock updated.`,
+  approveFailed: (message: string) => `Couldn't approve: ${message}`,
+  cancelOrder: 'Cancel order',
+  keepOrder: 'Keep order',
+  cancelOrderTitle: (n: number) => `Cancel order #${n}?`,
+  cancelPendingText: 'It stays in the list as cancelled. Stock is not changed.',
+  cancelApprovedText: 'Its items go back in stock.',
+  orderCancelled: (n: number) => `Order #${n} cancelled.`,
+  cancelFailed: (message: string) => `Couldn't cancel: ${message}`,
+  orderSaved: (n: number) => `Order #${n} updated.`,
+  orderSaveFailed: (message: string) => `Couldn't save the order: ${message}`,
+  orderChangedElsewhere: 'This order was just changed on another device.',
+  orderConflict: 'This order was changed on another device. The latest version is shown.',
+  orderGone: 'This order no longer exists. Pending orders are removed after 60 hours.',
+  undoApproval: 'Undo approval',
+  undoApprovalTitle: (n: number) => `Undo approval of order #${n}?`,
+  undoApprovalText: 'The order goes back to Pending and its items go back in stock:',
+  undoCancel: 'Undo cancel',
+  undoCancelTitle: (n: number) => `Reopen order #${n}?`,
+  undoCancelText: 'The order goes back to Pending. Stock is not changed until you approve it.',
+  orderReopened: (n: number) => `Order #${n} is pending again.`,
+  reopenFailed: (message: string) => `Couldn't undo: ${message}`,
 }
 
 export type Dict = typeof en
@@ -319,6 +416,9 @@ const ar: Dict = {
     nothingSaved: 'لم يُحفظ أي شيء. ربما حُذف العنصر، أو أن هذا الحساب لا يملك صلاحية التعديل.',
     deleted: 'تم حذف هذا العنصر من جهاز آخر.',
     conflict: 'تم تعديل هذا من جهاز آخر.',
+    notAllowed: 'هذا الحساب لا يملك صلاحية القيام بذلك.',
+    productUnavailable: 'أحد المنتجات لم يعد موجودًا.',
+    insufficientStock: 'المخزون لا يكفي لهذا الطلب.',
   },
   imageErrors: {
     notImage: 'هذا الملف ليس صورة. يُرجى اختيار صورة JPG أو PNG أو WebP.',
@@ -342,9 +442,11 @@ const ar: Dict = {
   navLabel: 'أقسام لوحة التحكم',
   openMenu: 'فتح القائمة',
   closeMenu: 'إغلاق القائمة',
+  tabOrders: 'الطلبات',
   tabProducts: 'المنتجات',
   tabCategories: 'التصنيفات',
   tabSettings: 'الإعدادات',
+  pendingBadge: (n) => `طلبات بانتظار الموافقة: ${n}`,
   live: 'مباشر',
   offline: 'غير متصل',
   liveTitle: 'تظهر هنا التغييرات من الأجهزة الأخرى تلقائيًا.',
@@ -543,6 +645,92 @@ const ar: Dict = {
   loadLatestConfirm: 'هل تريد تحميل أحدث الإعدادات؟ ستفقد التغييرات غير المحفوظة في هذه الصفحة.',
   settingsMissingTitle: 'الإعدادات غير موجودة',
   settingsMissingText: 'صف الإعدادات (id 1) غير موجود في قاعدة البيانات، لذا لا يوجد ما يمكن تعديله هنا.',
+
+  ordersTitle: 'الطلبات',
+  ordersWaiting: (n) =>
+    n === 0
+      ? 'لا توجد طلبات بانتظار الموافقة.'
+      : n === 1
+        ? 'طلب واحد بانتظار الموافقة'
+        : n === 2
+          ? 'طلبان بانتظار الموافقة'
+          : `${arOrders(n)} بانتظار الموافقة`,
+  ordersHint: 'تظهر الطلبات هنا عندما يتابع العميل إلى واتساب. وافق على الطلب بعد الدفع ليُخصم من المخزون.',
+  statusFilter: 'عرض الطلبات',
+  statusPending: 'بانتظار الموافقة',
+  statusApproved: 'تمت الموافقة',
+  statusCancelled: 'ملغي',
+  statusAll: 'الكل',
+  searchOrders: 'البحث في الطلبات',
+  searchOrdersPlaceholder: 'رقم الطلب أو الاسم أو الجوال…',
+  noOrders: 'لا توجد طلبات بعد.',
+  noOrdersHere: 'لا توجد طلبات هنا.',
+  orderNumber: (n) => `الطلب #${n}`,
+  itemCount: arItems,
+  removedIn: (hours) => (hours <= 1 ? 'يُحذف خلال ساعة إن لم تتم الموافقة' : `يُحذف بعد ${hours} ساعة إن لم تتم الموافقة`),
+  notEnoughStock: 'المخزون لا يكفي',
+  soundOnLabel: 'صوت الطلبات الجديدة مفعّل. اضغط لإيقافه',
+  soundOffLabel: 'صوت الطلبات الجديدة متوقف. اضغط لتفعيله',
+  soundOn: 'تم تفعيل صوت الطلبات الجديدة',
+  soundOff: 'تم إيقاف صوت الطلبات الجديدة',
+  newOrder: (n, name) => `طلب جديد #${n} من ${name}`,
+  customer: 'العميل',
+  phone: 'الجوال',
+  chatOnWhatsApp: 'محادثة على واتساب',
+  deliveryArea: 'التوصيل',
+  zoneInside: 'داخل الدوحة',
+  zoneOutside: 'خارج الدوحة',
+  placed: 'تاريخ الطلب',
+  approvedOn: 'تاريخ الموافقة',
+  cancelledOn: 'تاريخ الإلغاء',
+  status: 'الحالة',
+  items: 'المنتجات',
+  each: (price) => `${price} للقطعة`,
+  qtyFor: (name) => `كمية «${name}»`,
+  oneLessItem: (name) => `إنقاص واحد من «${name}»`,
+  oneMoreItem: (name) => `زيادة واحد إلى «${name}»`,
+  removeItem: (name) => `إزالة «${name}» من الطلب`,
+  addItemLabel: 'إضافة منتج إلى الطلب',
+  inOrder: (n) => `في الطلب × ${n}`,
+  inStockShort: (n) => `المتوفر ${n}`,
+  subtotal: 'المجموع الفرعي',
+  deliveryFee: 'التوصيل',
+  total: 'الإجمالي',
+  free: 'مجاني',
+  problemShort: (stock, needed) =>
+    stock === 0 ? `نفدت الكمية. يحتاج هذا الطلب إلى ${needed}.` : `المتوفر ${stock} فقط. يحتاج هذا الطلب إلى ${needed}.`,
+  problemMissing: 'تم حذف هذا المنتج من المتجر.',
+  cantApproveTitle: 'لا يمكن الموافقة بعد',
+  cantApproveHint: 'قلّل الكمية، أو أزل المنتج، أو أضف مخزونًا من صفحة المنتجات.',
+  saveBeforeApprove: 'احفظ تغييراتك قبل الموافقة.',
+  emptyOrder: 'يجب أن يحتوي الطلب على منتج واحد على الأقل. لإلغاء الطلب بالكامل، استخدم «إلغاء الطلب».',
+  approve: 'موافقة',
+  approveTitle: (n) => `الموافقة على الطلب #${n}؟`,
+  approveText: 'وافق فقط بعد أن يدفع العميل. سيتم خصم هذه المنتجات من المخزون:',
+  stockChange: (from, to) => `${from} ← ${to}`,
+  stockNotTracked: 'غير متتبَّع',
+  orderApproved: (n) => `تمت الموافقة على الطلب #${n} وتحديث المخزون.`,
+  approveFailed: (message) => `تعذّرت الموافقة: ${message}`,
+  cancelOrder: 'إلغاء الطلب',
+  keepOrder: 'إبقاء الطلب',
+  cancelOrderTitle: (n) => `إلغاء الطلب #${n}؟`,
+  cancelPendingText: 'سيبقى في القائمة كطلب ملغي. لن يتغير المخزون.',
+  cancelApprovedText: 'ستعود منتجاته إلى المخزون.',
+  orderCancelled: (n) => `تم إلغاء الطلب #${n}.`,
+  cancelFailed: (message) => `تعذّر الإلغاء: ${message}`,
+  orderSaved: (n) => `تم تحديث الطلب #${n}.`,
+  orderSaveFailed: (message) => `تعذّر حفظ الطلب: ${message}`,
+  orderChangedElsewhere: 'تم تعديل هذا الطلب للتو من جهاز آخر.',
+  orderConflict: 'تم تعديل هذا الطلب من جهاز آخر. تُعرض الآن أحدث نسخة.',
+  orderGone: 'هذا الطلب لم يعد موجودًا. تُحذف الطلبات المعلّقة بعد 60 ساعة.',
+  undoApproval: 'التراجع عن الموافقة',
+  undoApprovalTitle: (n) => `التراجع عن الموافقة على الطلب #${n}؟`,
+  undoApprovalText: 'سيعود الطلب إلى «بانتظار الموافقة» وستعود منتجاته إلى المخزون:',
+  undoCancel: 'التراجع عن الإلغاء',
+  undoCancelTitle: (n) => `إعادة فتح الطلب #${n}؟`,
+  undoCancelText: 'سيعود الطلب إلى «بانتظار الموافقة». لن يتغير المخزون حتى توافق عليه.',
+  orderReopened: (n) => `أصبح الطلب #${n} بانتظار الموافقة مجددًا.`,
+  reopenFailed: (message) => `تعذّر التراجع: ${message}`,
 }
 
 const dictionaries: Record<Lang, Dict> = { en, ar }
@@ -589,7 +777,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  useEffect(() => {
+  // A layout effect, so it runs before the panel's own (passive) effect that adds the
+  // pending-orders count to the title; that one wins.
+  useLayoutEffect(() => {
     document.documentElement.lang = lang
     document.documentElement.dir = dir
     document.title = t.docTitle
@@ -608,6 +798,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       errorText: (error) => {
         if (error instanceof AdminError) return t.errors[error.code]
         if (error instanceof ConflictError) return t.errors.conflict
+        if (error instanceof StockError) return t.errors.insufficientStock
         if (error instanceof ImageError) return t.imageErrors[error.code]
         return errorMessage(error) || t.errors.generic
       },

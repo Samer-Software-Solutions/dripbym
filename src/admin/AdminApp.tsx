@@ -1,20 +1,43 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
-import { ExternalLink, LayoutGrid, LogOut, Menu, Package, RefreshCw, Settings as SettingsIcon, ShieldAlert, X } from 'lucide-react'
+import {
+  ClipboardList,
+  ExternalLink,
+  LayoutGrid,
+  LogOut,
+  Menu,
+  Package,
+  RefreshCw,
+  Settings as SettingsIcon,
+  ShieldAlert,
+  X,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import type { CategoryRow, ProductRow, SettingsRow } from '../lib/db'
-import { byOrder, fetchCategories, fetchProducts, fetchSettings, isAdmin, subscribeToStore } from './api'
+import type { CategoryRow, OrderRow, ProductRow, SettingsRow } from '../lib/db'
+import {
+  byNewest,
+  byOrder,
+  fetchCategories,
+  fetchOrders,
+  fetchProducts,
+  fetchSettings,
+  isAdmin,
+  subscribeToStore,
+} from './api'
 import { I18nProvider, useT, type Dict } from './i18n'
+import { playChime, unlockSound } from './sound'
 import { LangToggle, Spinner, ToastProvider, useToast } from './ui'
 import Login from './Login'
+import OrdersPage from './OrdersPage'
 import ProductsPage from './ProductsPage'
 import CategoriesPanel from './CategoriesPanel'
 import SettingsPage from './SettingsPage'
 import './admin.css'
 
-type Tab = 'products' | 'categories' | 'settings'
+type Tab = 'orders' | 'products' | 'categories' | 'settings'
 
 const TABS: { id: Tab; label: (t: Dict) => string; icon: typeof Package }[] = [
+  { id: 'orders', label: (t) => t.tabOrders, icon: ClipboardList },
   { id: 'products', label: (t) => t.tabProducts, icon: Package },
   { id: 'categories', label: (t) => t.tabCategories, icon: LayoutGrid },
   { id: 'settings', label: (t) => t.tabSettings, icon: SettingsIcon },
@@ -22,7 +45,25 @@ const TABS: { id: Tab; label: (t: Dict) => string; icon: typeof Package }[] = [
 
 function readTab(): Tab {
   const hash = window.location.hash.replace(/^#\/?/, '')
-  return TABS.some((tab) => tab.id === hash) ? (hash as Tab) : 'products'
+  return TABS.some((tab) => tab.id === hash) ? (hash as Tab) : 'orders'
+}
+
+const SOUND_KEY = 'drip:admin-sound'
+
+function readSoundSetting(): boolean {
+  try {
+    return window.localStorage.getItem(SOUND_KEY) !== 'off'
+  } catch {
+    return true
+  }
+}
+
+function saveSoundSetting(on: boolean) {
+  try {
+    window.localStorage.setItem(SOUND_KEY, on ? 'on' : 'off')
+  } catch {
+    // Not saved; the choice still applies until the page is closed.
+  }
 }
 
 /** Inserts or replaces a row by id, keeping the list in display order. */
@@ -193,10 +234,13 @@ interface ShellProps {
 
 function Shell({ email, onSignOut, signingOut }: ShellProps) {
   const { t, errorText } = useT()
+  const toast = useToast()
   const [tab, setTab] = useState<Tab>(readTab)
+  const [orders, setOrders] = useState<OrderRow[]>([])
   const [products, setProducts] = useState<ProductRow[]>([])
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [settings, setSettings] = useState<SettingsRow | null>(null)
+  const [soundOn, setSoundOn] = useState(readSoundSetting)
   const [loading, setLoading] = useState(true)
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState<unknown>(null)
@@ -232,11 +276,48 @@ function Shell({ email, onSignOut, signingOut }: ShellProps) {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  const pendingCount = orders.filter((order) => order.status === 'pending').length
+
+  useEffect(() => {
+    document.title = pendingCount > 0 ? `(${pendingCount}) ${t.docTitle}` : t.docTitle
+    return () => {
+      document.title = t.docTitle
+    }
+  }, [pendingCount, t])
+
+  // Browsers only play sound after the first click/tap/key on the page.
+  useEffect(() => {
+    const unlock = () => {
+      unlockSound()
+      document.removeEventListener('pointerdown', unlock)
+      document.removeEventListener('keydown', unlock)
+    }
+    document.addEventListener('pointerdown', unlock)
+    document.addEventListener('keydown', unlock)
+    return unlock
+  }, [])
+
+  const toggleSound = () => {
+    const next = !soundOn
+    setSoundOn(next)
+    saveSoundSetting(next)
+    if (next) playChime()
+    toast.success(next ? t.soundOn : t.soundOff)
+  }
+
+  // Read by the live-update handler, which is set up once.
+  const announceOrder = useRef<(row: OrderRow) => void>(() => undefined)
+  announceOrder.current = (row) => {
+    if (soundOn) playChime()
+    toast.success(t.newOrder(row.number, row.customer_name))
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     try {
-      const [p, c, s] = await Promise.all([fetchProducts(), fetchCategories(), fetchSettings()])
+      const [o, p, c, s] = await Promise.all([fetchOrders(), fetchProducts(), fetchCategories(), fetchSettings()])
+      setOrders(o.sort(byNewest))
       setProducts(p.sort(byOrder))
       setCategories(c.sort(byOrder))
       setSettings(s)
@@ -265,14 +346,23 @@ function Shell({ email, onSignOut, signingOut }: ShellProps) {
           change.type === 'delete' ? list.filter((c) => c.id !== change.id) : upsertRow(list, change.row),
         ),
       onSettings: (row) => setSettings(row),
+      onOrder: (change) => {
+        if (change.type === 'delete') {
+          setOrders((list) => list.filter((order) => order.id !== change.id))
+          return
+        }
+        const { row } = change
+        setOrders((list) => [row, ...list.filter((order) => order.id !== row.id)].sort(byNewest))
+        if (change.type === 'insert') announceOrder.current(row)
+      },
       onStatus: setLive,
     })
   }, [loaded])
 
-  const hasData = products.length > 0 || categories.length > 0 || settings !== null
+  const hasData = orders.length > 0 || products.length > 0 || categories.length > 0 || settings !== null
 
   const logo = (
-    <a href="#/products" className="ad-logo">
+    <a href="#/orders" className="ad-logo">
       <span dir="ltr">Drip by M</span>
       <span className="ad-logo-sub">{t.adminLabel}</span>
     </a>
@@ -293,6 +383,13 @@ function Shell({ email, onSignOut, signingOut }: ShellProps) {
           {menuOpen ? <X size={22} aria-hidden /> : <Menu size={22} aria-hidden />}
         </button>
         {logo}
+        {pendingCount > 0 && (
+          <a href="#/orders" className="ad-topbar-orders">
+            <ClipboardList size={18} aria-hidden />
+            <span aria-hidden>{pendingCount}</span>
+            <span className="ad-sr-only">{t.pendingBadge(pendingCount)}</span>
+          </a>
+        )}
       </div>
 
       {menuOpen && <div className="ad-sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />}
@@ -305,6 +402,12 @@ function Shell({ email, onSignOut, signingOut }: ShellProps) {
             <a key={id} href={`#/${id}`} className="ad-sidenav-link" aria-current={tab === id ? 'page' : undefined}>
               <Icon size={19} aria-hidden />
               {label(t)}
+              {id === 'orders' && pendingCount > 0 && (
+                <span className="ad-nav-count">
+                  <span aria-hidden>{pendingCount}</span>
+                  <span className="ad-sr-only">{t.pendingBadge(pendingCount)}</span>
+                </span>
+              )}
             </a>
           ))}
         </nav>
@@ -356,6 +459,17 @@ function Shell({ email, onSignOut, signingOut }: ShellProps) {
               <p className="ad-banner ad-banner--error" role="alert">
                 {t.refreshFailed(errorText(loadError))}
               </p>
+            )}
+            {tab === 'orders' && (
+              <OrdersPage
+                orders={orders}
+                setOrders={setOrders}
+                products={products}
+                soundOn={soundOn}
+                onToggleSound={toggleSound}
+                onReload={load}
+                reloading={loading}
+              />
             )}
             {tab === 'products' && (
               <ProductsPage

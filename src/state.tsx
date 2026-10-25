@@ -138,8 +138,18 @@ interface Shop {
   dismissToast: () => void
   customer: Customer
   setCustomer: (update: Partial<Customer>) => void
-  buildWhatsAppUrl: () => string | undefined
+  /** Saves the order for the admin panel and returns the WhatsApp link carrying its number. */
+  placeOrder: () => Promise<string | undefined>
 }
+
+/** The order last saved from this browser, so tapping checkout again doesn't create a duplicate. */
+interface LastOrder {
+  key: string
+  number: number
+  at: number
+}
+
+const REUSE_ORDER_MS = 60 * 60 * 1000
 
 const ShopContext = createContext<Shop | null>(null)
 
@@ -149,6 +159,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = usePersistentState<Cart>('drip:cart', {})
   const [wishlist, setWishlist] = usePersistentState<string[]>('drip:wishlist', [])
   const [customer, setCustomerState] = usePersistentState<Customer>('drip:customer', { name: '', phone: '', zone: null })
+  const [lastOrder, setLastOrder] = usePersistentState<LastOrder | null>('drip:last-order', null)
   const [bagOpen, setBagOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number>()
@@ -231,13 +242,36 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const toggleWishlist = (id: string) =>
     setWishlist((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
-  const buildWhatsAppUrl = () => {
-    const number = store.settings.whatsapp.replace(/\D/g, '')
-    if (!number) return undefined
+  /** Saves the order (once per bag + details) and returns the WhatsApp link with its number. */
+  const placeOrder = async () => {
+    const whatsapp = store.settings.whatsapp.replace(/\D/g, '')
+    if (!whatsapp) return undefined
+    const phone = customer.phone.replace(/\D/g, '')
+    const items = cartLines.map(({ product, qty }) => ({ product_id: product.id, qty }))
+    const key = JSON.stringify([customer.name.trim(), phone, customer.zone, items])
+
+    let orderNumber: number | undefined
+    if (lastOrder?.key === key && Date.now() - lastOrder.at < REUSE_ORDER_MS) {
+      orderNumber = lastOrder.number
+    } else if (supabase) {
+      const { data, error } = await supabase
+        .rpc('place_order', { p_name: customer.name, p_phone: phone, p_zone: customer.zone, p_items: items })
+        .single<{ number: number }>()
+      // If saving fails the customer can still order; the message just has no order number.
+      if (error) console.warn('Could not save the order', error.message)
+      else {
+        orderNumber = data.number
+        setLastOrder({ key, number: data.number, at: Date.now() })
+      }
+    }
+    return buildWhatsAppUrl(whatsapp, orderNumber)
+  }
+
+  const buildWhatsAppUrl = (number: string, orderNumber: number | undefined) => {
     const fee = deliveryFee(customer.zone)
     const zoneLabel = customer.zone === 'outside' ? 'Outside Doha' : 'Inside Doha'
     const message = [
-      'Drip by M order',
+      orderNumber ? `Drip by M order #${orderNumber}` : 'Drip by M order',
       '',
       ...cartLines.map(({ product, qty, unit }) => `${product.name_en} × ${qty} — ${unit * qty} QAR`),
       '',
@@ -278,7 +312,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     dismissToast: () => setToast(null),
     customer,
     setCustomer: (update) => setCustomerState((prev) => ({ ...prev, ...update })),
-    buildWhatsAppUrl,
+    placeOrder,
   }
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>
