@@ -68,6 +68,7 @@ const products: ProductRow[] = seeds.map(([id, nameEn, nameAr, desc, category, p
   price,
   discount_price: null,
   image_url: `/images/${image}.webp`,
+  images: [],
   stock: null,
   active: true,
   sort_order: i + 1,

@@ -1,5 +1,5 @@
-import { Heart, Plus } from 'lucide-react'
-import { effectivePrice, isLowStock, isSoldOut, type ProductRow } from '../lib/db'
+import { Heart, Images, Plus } from 'lucide-react'
+import { effectivePrice, isLowStock, isSoldOut, productImages, type ProductRow } from '../lib/db'
 import { useShop } from '../state'
 
 interface CollectionProps {
@@ -61,6 +61,7 @@ function ProductCard({ product, index, onOpen }: { product: ProductRow; index: n
   const onSale = price < product.price
   const title = name(product)
   const subtitle = description(product)
+  const photoCount = productImages(product).length
 
   return (
     <article className={`product-card reveal ${soldOut ? 'sold-out' : ''}`} style={{ animationDelay: `${index * 110}ms` }}>
@@ -68,6 +69,13 @@ function ProductCard({ product, index, onOpen }: { product: ProductRow; index: n
         <button type="button" className="product-image-button" onClick={onOpen} aria-label={`${t.details}: ${title}`}>
           <img src={product.image_url} alt={title} loading="lazy" />
         </button>
+        {photoCount > 1 && (
+          <span className="photo-count" title={t.photosCount.replace('{n}', String(photoCount))}>
+            <Images size={14} aria-hidden="true" />
+            <span aria-hidden="true">{photoCount}</span>
+            <span className="sr-only">{t.photosCount.replace('{n}', String(photoCount))}</span>
+          </span>
+        )}
         {soldOut ? (
           <span className="product-tag sold-out">{t.soldOut}</span>
         ) : lowStock ? (

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
-import { AlertTriangle, ImageOff, RefreshCw, Trash2, Upload } from 'lucide-react'
-import type { CategoryRow, ProductRow } from '../lib/db'
+import { AlertTriangle, ChevronLeft, ChevronRight, ImagePlus, RefreshCw, Star, Trash2, X } from 'lucide-react'
+import { MAX_PRODUCT_IMAGES, productImages, type CategoryRow, type ProductRow } from '../lib/db'
 import {
   AdminError,
   ConflictError,
   createProduct,
   deleteProduct,
-  removeStorageImage,
+  removeStorageImages,
   updateProduct,
   uploadProductImage,
   type ProductInput,
@@ -48,18 +48,28 @@ interface FormState {
 
 type ErrorKey = 'nameRequired' | 'priceRequired' | 'priceInvalid' | 'saleInvalid' | 'saleTooHigh' | 'stockFieldInvalid'
 type FormErrors = Partial<Record<'name_en' | 'price' | 'discount_price' | 'stock', ErrorKey>>
-type ProductFields = Omit<ProductInput, 'image_url' | 'sort_order'>
+type ProductFields = Omit<ProductInput, 'image_url' | 'images' | 'sort_order'>
 
 type FormProblem =
   | { kind: 'conflict'; latest: ProductRow }
   | { kind: 'deleted' }
   | { kind: 'other'; error: unknown }
 
-interface PendingImage {
-  blob: Blob
-  ext: string
-  preview: string
+/** One photo in the editor: either already saved (url is its public URL) or new (url is a local preview). */
+interface Photo {
+  key: string
+  url: string
+  /** Present for photos picked in this editor; uploaded when the product is saved. */
+  file?: { blob: Blob; ext: string }
 }
+
+let photoKeySeq = 0
+const photoKey = () => `photo-${++photoKeySeq}`
+
+const savedPhotos = (product: ProductRow | null): Photo[] =>
+  product ? productImages(product).map((url) => ({ key: photoKey(), url })) : []
+
+const photoUrls = (photos: Photo[]) => photos.map((p) => p.url).join('\n')
 
 function initialForm(product: ProductRow | null, categories: CategoryRow[]): FormState {
   return {
@@ -131,25 +141,30 @@ export default function ProductEditor(props: Props) {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<'' | 'upload' | 'save'>('')
 
-  const [image, setImage] = useState<PendingImage | null>(null)
+  const [initialPhotos, setInitialPhotos] = useState<Photo[]>(() => savedPhotos(product))
+  const [photos, setPhotos] = useState<Photo[]>(initialPhotos)
   const [preparing, setPreparing] = useState(false)
   const [imageError, setImageError] = useState<unknown>(null)
+  /** How many picked files didn't fit under the photo limit (shown as a note), or 0. */
+  const [skippedPhotos, setSkippedPhotos] = useState(0)
+  const [uploadProgress, setUploadProgress] = useState<[number, number] | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const previewUrls = useRef(new Set<string>())
 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Free the preview's memory when it is replaced or the editor closes.
-  useEffect(
-    () => () => {
-      if (image) URL.revokeObjectURL(image.preview)
-    },
-    [image],
-  )
+  // Free the previews' memory when the editor closes.
+  useEffect(() => {
+    const urls = previewUrls.current
+    return () => urls.forEach((url) => URL.revokeObjectURL(url))
+  }, [])
 
   const busy = saving || deleting
-  const dirty = image !== null || JSON.stringify(form) !== JSON.stringify(initial)
-  const currentImage = image?.preview ?? base?.image_url ?? ''
+  const photosChanged = photoUrls(photos) !== photoUrls(initialPhotos)
+  const hasNewPhotos = photos.some((p) => p.file)
+  const roomForPhotos = MAX_PRODUCT_IMAGES - photos.length
+  const dirty = photosChanged || JSON.stringify(form) !== JSON.stringify(initial)
   const removedElsewhere = gone || (product !== null && liveProduct === null && !busy)
   const changedElsewhere =
     !busy && !removedElsewhere && base !== null && liveProduct !== null && liveProduct.updated_at !== base.updated_at
@@ -167,33 +182,70 @@ export default function ProductEditor(props: Props) {
 
   function loadLatest(row: ProductRow) {
     const next = initialForm(row, categories)
+    const nextPhotos = savedPhotos(row)
     setBase(row)
     setInitial(next)
     setForm(next)
+    setInitialPhotos(nextPhotos)
+    setPhotos(nextPhotos)
+    setSkippedPhotos(0)
+    setImageError(null)
     setErrors({})
     setProblem(null)
     onLatest(row)
   }
 
-  async function handleFile(file: File | undefined) {
-    if (!file) return
+  async function handleFiles(fileList: FileList | null | undefined) {
+    const files = Array.from(fileList ?? [])
+    if (!files.length) return
     setImageError(null)
+    const accepted = files.slice(0, Math.max(0, roomForPhotos))
+    setSkippedPhotos(files.length - accepted.length)
+    if (!accepted.length) return
     setPreparing(true)
     try {
-      const prepared = await prepareImage(file)
-      setImage({ blob: prepared.blob, ext: prepared.ext, preview: URL.createObjectURL(prepared.blob) })
-    } catch (e) {
-      setImageError(e)
+      // One at a time: each photo is resized in the browser, which is heavy on phones.
+      for (const file of accepted) {
+        try {
+          const prepared = await prepareImage(file)
+          const url = URL.createObjectURL(prepared.blob)
+          previewUrls.current.add(url)
+          setPhotos((list) => [...list, { key: photoKey(), url, file: { blob: prepared.blob, ext: prepared.ext } }])
+        } catch (e) {
+          setImageError(e)
+        }
+      }
     } finally {
       setPreparing(false)
     }
+  }
+
+  function movePhoto(from: number, to: number) {
+    setPhotos((list) => {
+      if (to < 0 || to >= list.length) return list
+      const next = [...list]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
+
+  function removePhoto(index: number) {
+    setPhotos((list) => list.filter((_, i) => i !== index))
+    setSkippedPhotos(0)
+  }
+
+  function undoPhotoChanges() {
+    setPhotos(initialPhotos)
+    setSkippedPhotos(0)
+    setImageError(null)
   }
 
   function onDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault()
     setDragOver(false)
     if (busy || preparing) return
-    void handleFile(event.dataTransfer.files?.[0])
+    void handleFiles(event.dataTransfer.files)
   }
 
   async function save(event: FormEvent) {
@@ -209,31 +261,44 @@ export default function ProductEditor(props: Props) {
     }
 
     setSaving(true)
-    const oldUrl = base?.image_url ?? ''
-    let uploadedUrl: string | null = null
+    const oldUrls = base ? productImages(base) : []
+    const uploaded: string[] = []
     try {
-      let imageUrl = oldUrl
-      if (image) {
+      // Upload new photos first, in order, then save the product pointing at all of them.
+      const newCount = photos.filter((p) => p.file).length
+      const baseName = base?.id ?? randomId()
+      const urls: string[] = []
+      for (const photo of photos) {
+        if (!photo.file) {
+          urls.push(photo.url)
+          continue
+        }
         setStatus('upload')
-        uploadedUrl = await uploadProductImage(image.blob, base?.id ?? randomId(), image.ext)
-        imageUrl = uploadedUrl
+        setUploadProgress([uploaded.length + 1, newCount])
+        const url = await uploadProductImage(photo.file.blob, baseName, photo.file.ext)
+        uploaded.push(url)
+        urls.push(url)
       }
       setStatus('save')
+      setUploadProgress(null)
+      // `image_url` is the cover; the database also keeps it equal to images[0].
+      const gallery = { images: urls, image_url: urls[0] ?? '' }
       let saved: ProductRow
       if (base) {
         const guard = base.updated_at ? { updated_at: base.updated_at } : undefined
-        saved = await updateProduct(base.id, { ...result.fields, image_url: imageUrl }, guard)
+        saved = await updateProduct(base.id, { ...result.fields, ...gallery }, guard)
       } else {
         const maxOrder = products.reduce((max, p) => Math.max(max, p.sort_order), 0)
-        saved = await createProduct({ ...result.fields, image_url: imageUrl, sort_order: maxOrder + 1 })
+        saved = await createProduct({ ...result.fields, ...gallery, sort_order: maxOrder + 1 })
       }
-      // The new photo is safely saved; remove the one it replaced (only if it lives in our bucket).
-      if (uploadedUrl && oldUrl && oldUrl !== uploadedUrl) void removeStorageImage(oldUrl)
+      // Saved: delete photos that were removed or replaced (only ones in our bucket).
+      void removeStorageImages(oldUrls.filter((url) => !urls.includes(url)))
       toast.success(base ? t.savedProduct(productName(saved)) : t.addedProduct(productName(saved)))
       onSaved(saved)
     } catch (e) {
-      // Nothing was saved, so the photo we just uploaded isn't used anywhere.
-      if (uploadedUrl) void removeStorageImage(uploadedUrl)
+      // Nothing was saved, so the photos we just uploaded aren't used anywhere.
+      void removeStorageImages(uploaded)
+      setUploadProgress(null)
       if (e instanceof ConflictError) {
         setProblem({ kind: 'conflict', latest: e.latest as ProductRow })
       } else if (e instanceof AdminError && e.code === 'deleted') {
@@ -254,7 +319,7 @@ export default function ProductEditor(props: Props) {
     setDeleting(true)
     try {
       await deleteProduct(base.id)
-      void removeStorageImage(base.image_url)
+      void removeStorageImages(productImages(base))
       toast.success(t.deletedProduct(productName(base)))
       onDeleted(base.id)
     } catch (e) {
@@ -303,7 +368,11 @@ export default function ProductEditor(props: Props) {
               <Trash2 size={18} aria-hidden /> {t.delete}
             </button>
           )}
-          {status && <span className="ad-foot-status">{status === 'upload' ? t.uploadingPhoto : t.saving}</span>}
+          {status && (
+            <span className="ad-foot-status">
+              {status === 'upload' && uploadProgress ? t.uploadingPhotoN(...uploadProgress) : t.saving}
+            </span>
+          )}
           <button type="button" className="ad-btn ad-btn--ghost" onClick={requestClose} disabled={busy}>
             {t.cancel}
           </button>
@@ -346,9 +415,9 @@ export default function ProductEditor(props: Props) {
           )
         )}
 
-        {/* Photo */}
+        {/* Photos */}
         <div
-          className={`ad-drop${dragOver ? ' is-over' : ''}`}
+          className={`ad-gallery${dragOver ? ' is-over' : ''}`}
           onDragOver={(e) => {
             e.preventDefault()
             setDragOver(true)
@@ -356,56 +425,108 @@ export default function ProductEditor(props: Props) {
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
         >
-          <button
-            type="button"
-            className="ad-drop-preview"
-            onClick={() => fileRef.current?.click()}
-            disabled={busy || preparing}
-            aria-label={currentImage ? t.replacePhoto : t.uploadPhoto}
-          >
-            {preparing ? (
-              <Spinner size={24} />
-            ) : currentImage ? (
-              <img src={currentImage} alt="" />
-            ) : (
-              <ImageOff size={32} aria-hidden />
-            )}
-          </button>
-          <div className="ad-drop-text">
-            <p className="ad-label-text">{t.photo}</p>
-            <button
-              type="button"
-              className="ad-btn ad-btn--secondary ad-btn--small"
-              onClick={() => fileRef.current?.click()}
-              disabled={busy || preparing}
-            >
-              <Upload size={16} aria-hidden /> {currentImage ? t.replacePhoto : t.uploadPhoto}
-            </button>
-            <p className="ad-field-hint">{t.photoHint}</p>
-            {preparing && <p className="ad-field-hint">{t.preparingPhoto}</p>}
-            {image && !preparing && (
-              <p className="ad-field-hint ad-note">
-                {t.newPhotoReady}{' '}
-                <button type="button" className="ad-link-btn" onClick={() => setImage(null)} disabled={busy}>
-                  {t.undo}
-                </button>
-              </p>
-            )}
-            {imageError != null && (
-              <p className="ad-field-error" role="alert">
-                {errorText(imageError)}
-              </p>
+          <div className="ad-gallery-head">
+            <p className="ad-label-text" id="p-photos-label">
+              {t.photos}{' '}
+              <span className="ad-gallery-count">{t.photoCount(photos.length, MAX_PRODUCT_IMAGES)}</span>
+            </p>
+            {photosChanged && !busy && (
+              <button type="button" className="ad-link-btn" onClick={undoPhotoChanges} disabled={preparing}>
+                {t.undoPhotoChanges}
+              </button>
             )}
           </div>
+
+          <ol className="ad-gallery-grid" aria-labelledby="p-photos-label">
+            {photos.map((photo, i) => {
+              const label = t.photoLabel(i + 1)
+              const last = i === photos.length - 1
+              return (
+                <li key={photo.key} className={`ad-gallery-item${i === 0 ? ' is-cover' : ''}`}>
+                  <img src={photo.url} alt={label} />
+                  {i === 0 && <span className="ad-gallery-badge">{t.coverBadge}</span>}
+                  {photo.file && i !== 0 && <span className="ad-gallery-badge is-new">{t.newBadge}</span>}
+                  <button
+                    type="button"
+                    className="ad-gallery-remove"
+                    onClick={() => removePhoto(i)}
+                    disabled={busy}
+                    aria-label={`${t.removePhoto}: ${label}`}
+                    title={t.removePhoto}
+                  >
+                    <X size={16} aria-hidden />
+                  </button>
+                  <div className="ad-gallery-tools">
+                    <button
+                      type="button"
+                      onClick={() => movePhoto(i, i - 1)}
+                      disabled={busy || i === 0}
+                      aria-label={`${t.moveEarlier}: ${label}`}
+                      title={t.moveEarlier}
+                    >
+                      <ChevronLeft size={18} className="ad-flip" aria-hidden />
+                    </button>
+                    {i > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => movePhoto(i, 0)}
+                        disabled={busy}
+                        aria-label={`${t.makeCover}: ${label}`}
+                        title={t.makeCover}
+                      >
+                        <Star size={16} aria-hidden />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => movePhoto(i, i + 1)}
+                      disabled={busy || last}
+                      aria-label={`${t.moveLater}: ${label}`}
+                      title={t.moveLater}
+                    >
+                      <ChevronRight size={18} className="ad-flip" aria-hidden />
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+            {roomForPhotos > 0 && (
+              <li>
+                <button
+                  type="button"
+                  className="ad-gallery-add"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy || preparing}
+                >
+                  {preparing ? <Spinner size={24} /> : <ImagePlus size={26} aria-hidden />}
+                  <span>{preparing ? t.preparingPhoto : t.addPhotos}</span>
+                </button>
+              </li>
+            )}
+          </ol>
+
+          <p className="ad-field-hint">{t.photosHint(MAX_PRODUCT_IMAGES)}</p>
+          {hasNewPhotos && !preparing && <p className="ad-field-hint ad-note">{t.newPhotosReady}</p>}
+          {skippedPhotos > 0 && (
+            <p className="ad-field-error" role="alert">
+              {t.photosLimit(MAX_PRODUCT_IMAGES, skippedPhotos)}
+            </p>
+          )}
+          {imageError != null && (
+            <p className="ad-field-error" role="alert">
+              {errorText(imageError)}
+            </p>
+          )}
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
+            multiple
             className="ad-sr-only"
             tabIndex={-1}
             aria-hidden
             onChange={(e) => {
-              void handleFile(e.target.files?.[0])
+              void handleFiles(e.target.files)
               e.target.value = ''
             }}
           />

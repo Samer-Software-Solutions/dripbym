@@ -43,12 +43,17 @@ The publishable key is safe in the browser; never put the `service_role` / secre
 
 ### Database (Supabase)
 
-- `products` — names/descriptions in EN + AR, category, price, sale price, image, stock (empty = unlimited), visible flag, order.
+- `products` — names/descriptions in EN + AR, category, price, sale price, photos, stock (empty = unlimited), visible flag, order.
+  - `images` is the photo gallery (up to 6, in order; the first is the cover). `image_url` always holds the cover, so the
+    bag, orders and WhatsApp checkout keep using it. The trigger `products_sync_cover` keeps the two in step whichever one
+    is written. Products saved before galleries existed have an empty `images` and just `image_url`.
 - `categories` — the filter tabs.
 - `settings` — WhatsApp, Instagram, delivery fees (inside / outside Doha), low-stock threshold, and all editable site text.
 - `admins` — who can edit. Row-level security: the public can only read visible products and settings; only admins can write.
 - `orders` — orders from the WhatsApp checkout (number, customer, items as ordered, totals, status). Only admins can read them.
-- Storage bucket `product-images` — uploaded product photos.
+- Storage bucket `product-images` — uploaded product photos. The admin panel shrinks each photo in the browser (WebP,
+  max 1200 px, ~80 kB) before uploading, and deletes photos from the bucket when they are removed from a product or the
+  product is deleted. The shop's grid only downloads cover photos; a product's other photos load when it is opened.
 
 ### Orders and stock
 

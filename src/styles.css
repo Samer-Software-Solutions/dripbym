@@ -1241,19 +1241,46 @@ footer a:hover {
   min-height: 650px;
   background: #ded4c7;
 }
-.product-gallery > img {
+.product-gallery-track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.product-gallery-track::-webkit-scrollbar {
+  display: none;
+}
+.product-gallery-track:focus-visible {
+  outline: 2px solid var(--espresso);
+  outline-offset: -4px;
+}
+.product-gallery-slide {
+  position: relative;
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.product-gallery-slide > img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  padding: 25px;
+  padding: 25px 25px 44px;
   object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
   animation: heroFade 0.45s both;
 }
 .gallery-prev,
 .gallery-next {
   position: absolute;
   top: 50%;
+  margin-top: -21px;
   z-index: 2;
   display: grid;
   place-items: center;
@@ -1281,14 +1308,52 @@ footer a:hover {
   transform: translate(-50%);
 }
 .gallery-dots button {
-  width: 7px;
-  height: 7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  border: 1px solid #fff;
-  border-radius: 50%;
 }
-.gallery-dots button.active {
-  background: #fff;
+/* A small dot inside a finger-sized button. */
+.gallery-dots button::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--cocoa);
+  border-radius: 50%;
+  transition: background-color 0.2s, transform 0.2s;
+}
+.gallery-dots button.active::before {
+  background: var(--espresso);
+  border-color: var(--espresso);
+  transform: scale(1.2);
+}
+[dir='rtl'] .gallery-prev svg,
+[dir='rtl'] .gallery-next svg {
+  transform: scaleX(-1);
+}
+.gallery-prev:hover,
+.gallery-next:hover {
+  background: #140c0973;
+}
+/* "4 photos" on a shop card. */
+.photo-count {
+  position: absolute;
+  bottom: 14px;
+  inset-inline-end: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  color: #fff;
+  background: #1d110d8c;
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
 }
 .product-dialog-copy {
   padding: 55px 43px 42px;
@@ -1711,6 +1776,18 @@ footer a:hover {
   }
   .product-gallery {
     min-height: 48vh;
+  }
+  .gallery-prev,
+  .gallery-next {
+    width: 38px;
+    height: 38px;
+    margin-top: -19px;
+  }
+  .gallery-prev {
+    inset-inline-start: 10px;
+  }
+  .gallery-next {
+    inset-inline-end: 10px;
   }
   .product-dialog-copy {
     padding: 34px 25px 30px;

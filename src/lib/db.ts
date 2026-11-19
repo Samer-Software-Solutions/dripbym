@@ -21,8 +21,16 @@ export interface ProductRow {
   price: number
   /** Sale price; shown with the regular price struck through. Null when not on sale. */
   discount_price: number | null
-  /** Either a site path (/images/x.webp) or a Supabase Storage public URL. */
+  /**
+   * The cover photo: a site path (/images/x.webp) or a Supabase Storage public URL.
+   * Always the same as `images[0]` when `images` has photos (a database trigger keeps them in step).
+   */
   image_url: string
+  /**
+   * All photos in display order, cover first (at most MAX_PRODUCT_IMAGES). Empty for products
+   * saved before galleries existed: they only have `image_url`. Read it through `productImages()`.
+   */
+  images: string[]
   /** Units in stock. Null means unlimited / not tracked. */
   stock: number | null
   /** Hidden from the shop when false. */
@@ -30,6 +38,16 @@ export interface ProductRow {
   sort_order: number
   created_at?: string
   updated_at?: string
+}
+
+/** The database refuses more than this many photos per product. */
+export const MAX_PRODUCT_IMAGES = 6
+
+/** A product's photos in display order, cover first. Works for older rows that only have `image_url`. */
+export function productImages(p: Pick<ProductRow, 'image_url'> & { images?: string[] | null }): string[] {
+  const gallery = (p.images ?? []).filter(Boolean)
+  if (gallery.length) return gallery
+  return p.image_url ? [p.image_url] : []
 }
 
 export interface LocalizedText {

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ShoppingBag } from 'lucide-react'
-import { effectivePrice, isLowStock, isSoldOut, type ProductRow } from '../lib/db'
+import { effectivePrice, isLowStock, isSoldOut, productImages, type ProductRow } from '../lib/db'
 import { useShop } from '../state'
 import { Overlay } from './Overlay'
+import { ProductGallery } from './ProductGallery'
 
 interface ProductDialogProps {
   product: ProductRow | null
@@ -22,6 +23,9 @@ export function ProductDialog({ product, onClose }: ProductDialogProps) {
   const lowStock = shown ? isLowStock(shown, store.settings.low_stock_threshold) : false
   const maxedOut = shown ? !soldOut && (cart[shown.id] || 0) >= maxQty(shown) : false
   const price = shown ? effectivePrice(shown) : 0
+  // Same photos → same array, so the gallery only resets when the photos really change.
+  const imagesKey = shown ? productImages(shown).join('\n') : ''
+  const images = useMemo(() => (imagesKey ? imagesKey.split('\n') : []), [imagesKey])
 
   return (
     <Overlay
@@ -36,9 +40,7 @@ export function ProductDialog({ product, onClose }: ProductDialogProps) {
     >
       {shown && (
         <>
-          <div className="product-gallery">
-            <img key={shown.image_url} src={shown.image_url} alt={name(shown)} />
-          </div>
+          <ProductGallery images={images} alt={name(shown)} />
 
           <div className="product-dialog-copy">
             <div className="dialog-header">

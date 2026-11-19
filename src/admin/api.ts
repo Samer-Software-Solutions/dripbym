@@ -69,6 +69,7 @@ export const toProduct = (row: ProductRow): ProductRow => ({
   discount_price: row.discount_price == null ? null : Number(row.discount_price),
   stock: row.stock == null ? null : Number(row.stock),
   sort_order: Number(row.sort_order),
+  images: Array.isArray(row.images) ? row.images : [],
 })
 
 export const toCategory = (row: CategoryRow): CategoryRow => ({ ...row, sort_order: Number(row.sort_order) })
@@ -326,7 +327,8 @@ export function storagePathFromUrl(url: string | null | undefined): string | nul
 
 export async function uploadProductImage(blob: Blob, baseName: string, ext: string): Promise<string> {
   const safeBase = baseName.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'product'
-  const path = `products/${safeBase}-${Date.now()}.${ext}`
+  // The random part keeps names unique when several photos are uploaded in the same moment.
+  const path = `products/${safeBase}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
   const bucket = client().storage.from(PRODUCT_IMAGES_BUCKET)
   const { error } = await bucket.upload(path, blob, {
     contentType: blob.type,
@@ -337,10 +339,10 @@ export async function uploadProductImage(blob: Blob, baseName: string, ext: stri
   return bucket.getPublicUrl(path).data.publicUrl
 }
 
-/** Deletes an image from our bucket. Site images are left alone. Never throws. */
-export async function removeStorageImage(url: string | null | undefined): Promise<void> {
-  const path = storagePathFromUrl(url)
-  if (!path || !supabase) return
-  const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([path])
-  if (error) console.warn('Could not delete old product image', path, error.message)
+/** Deletes images from our bucket. Site images (/images/…) are left alone. Never throws. */
+export async function removeStorageImages(urls: (string | null | undefined)[]): Promise<void> {
+  const paths = [...new Set(urls.map(storagePathFromUrl).filter((p): p is string => !!p))]
+  if (!paths.length || !supabase) return
+  const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths)
+  if (error) console.warn('Could not delete old product images', paths, error.message)
 }
